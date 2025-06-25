@@ -8,11 +8,18 @@ from langfuse import observe, Langfuse
 from langfuse.openai import openai
 from pycaret.regression import load_model, predict_model
 
+import boto3
+import plotly.express as px
+import plotly.graph_objects as go
+from datetime import timedelta
+
+
 MODEL_NAME = "best_model"
 
 load_dotenv()
 
-
+s3 = boto3.client("s3")
+BUCKET_NAME = "maratonymateusz"
 
 # Tworzysz obiekt Langfuse
 langfuse = Langfuse(
@@ -119,22 +126,125 @@ def format_seconds_to_hms(seconds):
     secs = seconds % 60
     return f"{hours:02}:{minutes:02}:{secs:02}"
 
+def sekundy_na_hms_tick(sek):
+    return str(timedelta(seconds=int(sek)))
+
+
+
+### Wczytanie danych z serwera
+@st.cache_data
+def load_halfmarathon_data():
+    df_2023 = pd.read_csv(f"s3://{BUCKET_NAME}/data/halfmarathon_2023.csv")
+    df_2024 = pd.read_csv(f"s3://{BUCKET_NAME}/data/halfmarathon_2024.csv")
+
+    return df_2023, df_2024
+
+#
+# Rysowanie wykresu
+#
+
+def przygotuj_i_rysuj(
+    df, 
+    rok, 
+    czas_uzytkownika_s=None, 
+    wiek_uzytkownika=None, 
+    plec_uzytkownika=None, 
+    czas_hms_uzytkownika=None
+):
+    df = df[df["Rocznik"].between(1920, 2020)]
+    df = df[df["Czas"].notna() & (df["Czas"] != 0)]
+
+    df["Wiek"] = rok - df["Rocznik"]
+    df["czas_s"] = df["Czas"].astype(float)
+    df = df[df["czas_s"] > 0]
+    df["czas_hms"] = df["czas_s"].apply(format_seconds_to_hms)
+
+    kolor_map = {"M": "darkblue", "K": "deeppink"}
+
+    fig = px.scatter(
+        df,
+        x="czas_s",
+        y="Wiek",
+        color="Płeć",
+        color_discrete_map=kolor_map,
+        labels={"czas_s": "Czas (s)", "Wiek": "Wiek"},
+        opacity=0.2,
+        height=600,
+        custom_data=["Płeć", "czas_hms"]
+    )
+
+    fig.update_traces(hovertemplate=
+                      "Płeć: %{customdata[0]}<br>Wiek: %{y}<br>Czas: %{customdata[1]}")
+
+    tickvals = list(range(3600, 14401, 1800))  # co 30 min: od 1h do 4h
+    ticktext = [sekundy_na_hms_tick(val) for val in tickvals]
+
+    fig.update_layout(
+        title=dict(
+            text=f"Wyniki półmaratonu Wrocław - {rok}",
+            x=0.5,
+            xanchor="center"
+        ),
+        xaxis=dict(
+            tickmode="array",
+            tickvals=tickvals,
+            ticktext=ticktext,
+            range=[3600, 14400],
+            title="Czas",
+            showgrid=True,
+            gridcolor='rgba(200, 200, 200, 0.3)',
+            gridwidth=0.1,
+            griddash='dash'
+        ),
+        yaxis=dict(
+            showgrid=True,
+            gridcolor='rgba(200, 200, 200, 0.3)',
+            gridwidth=0.1,
+            title="Wiek",
+            griddash='dash'
+        )
+    )
+    fig.update_xaxes(layer="below traces") # osie pod wynikami
+    fig.update_yaxes(layer="below traces")
+
+    if all(v is not None for v in [czas_uzytkownika_s, wiek_uzytkownika, plec_uzytkownika, czas_hms_uzytkownika]):
+        fig.add_trace(
+            go.Scatter(
+                x=[czas_uzytkownika_s],
+                y=[wiek_uzytkownika],
+                mode="markers+text",
+                marker=dict(
+                    symbol="star",
+                    size=28,
+                    color="gold",
+                    line=dict(color="black", width=2)
+                ),
+                text=["Twój wynik!"],
+                textposition="top center",
+                textfont=dict(size=22, color="white", family="Arial"),
+                name="Twój wynik",
+                hovertemplate=(
+                    f"Płeć: {plec_uzytkownika}<br>"
+                    f"Wiek: {wiek_uzytkownika}<br>"
+                    f"Czas: {czas_hms_uzytkownika}<extra></extra>"
+                ),
+                opacity=1.0,
+                showlegend=True,
+            )
+        )
+    st.plotly_chart(fig, use_container_width=True)
+
 ########
 
 # Tytuł aplikacji
-#st.title("🏃 RunAlyze AI 🤖")
-#st.subheader("Oszacuję dla Ciebie czas w jakim mógłbyś przebiec półmaraton (~21km) jeśli się postarasz")
-
-st.markdown('<h1 class="centered-title">🏃 RunAlyze AI 📊</h1>', unsafe_allow_html=True)
-st.markdown('<h3 class="centered-title">Oszacuję dla Ciebie czas w jakim mógłbyś przebiec półmaraton (~21km) jeśli się postarasz! ⚡</h3>', unsafe_allow_html=True)
+st.markdown('<h1 style="text-align:center">🏃 RunAlyze AI 📊</h1>', unsafe_allow_html=True)
+st.markdown('<h3 style="text-align:center">Oszacuję dla Ciebie czas w jakim mógłbyś przebiec półmaraton (~21km) jeśli się postarasz! ⚡</h3>', unsafe_allow_html=True)
 
 
 if "text_area" not in st.session_state:
     st.session_state["text_area"] = ""
 if "submitted" not in st.session_state:
     st.session_state["submitted"] = False
-if "text_area" not in st.session_state:
-    st.session_state["text_area"] = ""
 # Ustaw placeholder (pokaże się, gdy pole jest puste)
 placeholder_text = "Pochwal się..."
 
@@ -146,7 +256,7 @@ text = st.text_area(
     placeholder=placeholder_text
 )
 
-if st.button("Szacowanko 🎯"):
+if st.button("Szacowanko 🤖"):
     if not text.strip():
         st.warning("Wprowadź dane przed kliknięciem!")
     else:
@@ -160,9 +270,6 @@ if st.button("Szacowanko 🎯"):
                 st.error(f"Błąd odczytu danych: {extracted.iloc[0]['error']}")
                 st.stop()
 
-            #plec = extracted.get("Płeć")
-            #wiek = extracted.get("Wiek")
-            #tempo = extracted.get("5 km Tempo")
             row = extracted.iloc[0]
             plec = row.get("Płeć")
             wiek = row.get("Wiek")
@@ -180,9 +287,6 @@ if st.button("Szacowanko 🎯"):
             if plec not in ["M", "K"]:
                 messages.append("⚠️ Nie udało się określić płci.")
                 valid = False
-            #if not isinstance(wiek, int) or not (10 <= wiek <= 100):
-                #messages.append("⚠️ Wiek poza zakresem.")
-                #valid = False
 
             try:
                 wiek = int(wiek)
@@ -214,8 +318,23 @@ if st.button("Szacowanko 🎯"):
             prediction = make_prediction_logged(dane_biegacza)
             prediction_time = prediction["prediction_label"].values[0]
             formatted_time = format_seconds_to_hms(prediction_time)
+            st.session_state["formatted_time"] = formatted_time
+
+            st.session_state["prediction_time"] = prediction_time
+            st.session_state["wiek"] = wiek
+            st.session_state["plec"] = plec
+            
             st.session_state["submitted"] = True
-            st.success(f" π razy 👁️ wyjdzie {formatted_time}")
+if "prediction_time" in st.session_state and "formatted_time" in st.session_state:
+    st.markdown(
+        """
+        <div style="text-align:center; margin-top:1em;">
+            <p style="font-size:20px; color:green;">✅ Udało się wyciągnąć dane i oszacować czas!</p>
+            <div style="font-size:28px; color:green; font-weight:bold;">🎯 Twój przewidywany czas: {}</div>
+        </div>
+        """.format(st.session_state["formatted_time"]),
+        unsafe_allow_html=True
+    )
 
 def reset():
     st.session_state["text_area"] = ""
@@ -223,3 +342,19 @@ def reset():
 
 if st.session_state["submitted"]:
     st.button("🔄 Odśwież", on_click=reset)
+
+
+
+    st.subheader("📊 Porównaj swój wynik z innymi biegaczami:")
+    rok = st.selectbox("Wybierz rok zawodów:", [2023, 2024])
+
+    df_2023, df_2024 = load_halfmarathon_data()
+    df = df_2023 if rok == 2023 else df_2024
+    przygotuj_i_rysuj(
+    df,
+    rok,
+    czas_uzytkownika_s=st.session_state["prediction_time"],
+    wiek_uzytkownika=st.session_state["wiek"],
+    plec_uzytkownika=st.session_state["plec"],
+    czas_hms_uzytkownika=st.session_state["formatted_time"]
+)

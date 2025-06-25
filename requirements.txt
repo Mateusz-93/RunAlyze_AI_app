@@ -1,5 +1,9 @@
-openai
-langfuse
-streamlit
+streamlit==1.44.1
+pandas==2.1.4
+pycaret==3.3.2
 python-dotenv
-pycaret
+langfuse==3.0.0
+boto3
+s3fs
+fsspec
+plotly
