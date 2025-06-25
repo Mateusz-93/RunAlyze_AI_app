@@ -7,3 +7,4 @@ boto3
 s3fs
 fsspec
 plotly
+openai
