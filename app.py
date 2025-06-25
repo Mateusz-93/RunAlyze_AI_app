@@ -168,13 +168,16 @@ def przygotuj_i_rysuj(
         color="Płeć",
         color_discrete_map=kolor_map,
         labels={"czas_s": "Czas (s)", "Wiek": "Wiek"},
-        opacity=0.2,
+        opacity=0.3,
         height=600,
         custom_data=["Płeć", "czas_hms"]
     )
 
-    fig.update_traces(hovertemplate=
-                      "Płeć: %{customdata[0]}<br>Wiek: %{y}<br>Czas: %{customdata[1]}")
+    fig.update_traces(
+        selector=dict(mode="markers"),
+        marker=dict(size=4),
+        hovertemplate="Płeć: %{customdata[0]}<br>Wiek: %{y}<br>Czas: %{customdata[1]}"
+)
 
     tickvals = list(range(3600, 14401, 1800))  # co 30 min: od 1h do 4h
     ticktext = [sekundy_na_hms_tick(val) for val in tickvals]
@@ -216,28 +219,52 @@ def przygotuj_i_rysuj(
                 marker=dict(
                     symbol="star",
                     size=28,
-                    color="gold",
+                    color="#FFD700",
                     line=dict(color="black", width=2)
                 ),
-                text=["Twój wynik!"],
-                textposition="top center",
-                textfont=dict(size=22, color="white", family="Arial"),
-                name="Twój wynik",
+                
+                
+                
                 hovertemplate=(
+                    f"<b>🏅 Twój wynik 🏁</b><br>"
                     f"Płeć: {plec_uzytkownika}<br>"
                     f"Wiek: {wiek_uzytkownika}<br>"
                     f"Czas: {czas_hms_uzytkownika}<extra></extra>"
                 ),
                 opacity=1.0,
-                showlegend=True,
+                showlegend=False,
             )
+        )
+        fig.add_annotation(
+            x=czas_uzytkownika_s,
+            y=wiek_uzytkownika + 0.5,  # lekko nad punktem
+            text="🏅 Twój wynik 🏁",
+            showarrow=True,
+            arrowhead=2,
+            arrowsize=1,
+            arrowwidth=3,
+            ax=0,  # przesunięcie strzałki w osi x
+            ay=-40,  # przesunięcie w osi y
+            font=dict(
+                size=18,
+                color="#FFD700",
+                family="Arial"
+            ),
+            bgcolor="#1c1c1c",
+            bordercolor="#FFD700",
+            borderwidth=1,
+            borderpad=6,
+            opacity=0.9
         )
     st.plotly_chart(fig, use_container_width=True)
 
 ########
 
 # Tytuł aplikacji
-st.markdown('<h1 style="text-align:center">🏃 RunAlyze AI 📊</h1>', unsafe_allow_html=True)
+st.markdown(
+    '<h1 style="text-align:center; color: #FFC300; font-family: Verdana; font-weight: bold;">🏃 RunAlyze AI 📊</h1>',
+    unsafe_allow_html=True
+)
 st.markdown('<h3 style="text-align:center">Oszacuję dla Ciebie czas w jakim mógłbyś przebiec półmaraton (~21km) jeśli się postarasz! ⚡</h3>', unsafe_allow_html=True)
 
 
@@ -325,7 +352,7 @@ if st.button("Szacowanko 🤖"):
             st.session_state["plec"] = plec
             
             st.session_state["submitted"] = True
-if "prediction_time" in st.session_state and "formatted_time" in st.session_state:
+if st.session_state.get("prediction_time") and st.session_state.get("formatted_time"):
     st.markdown(
         """
         <div style="text-align:center; margin-top:1em;">
@@ -339,6 +366,10 @@ if "prediction_time" in st.session_state and "formatted_time" in st.session_stat
 def reset():
     st.session_state["text_area"] = ""
     st.session_state["submitted"] = False
+    st.session_state["prediction_time"] = None
+    st.session_state["formatted_time"] = None
+    st.session_state["wiek"] = None
+    st.session_state["plec"] = None
 
 if st.session_state["submitted"]:
     st.button("🔄 Odśwież", on_click=reset)
