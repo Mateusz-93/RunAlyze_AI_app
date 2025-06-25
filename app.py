@@ -42,7 +42,7 @@ def get_data_from_user_text_observed(message, model="gpt-4o"):
     prompt = """
     Jesteś pomocnikiem, któremu zostaną podane dane dotyczące płci, wieku oraz tempie biegu na 5 km. 
     <płeć>: dla mężczyzny oznacz jako "M". Dla kobiety oznacz jako "K". Jeżeli nie zostanie podane wprost to może po imieniu albo sposobie pisania uda Ci się ustalić płeć. Jeśli nie to zostaw puste.
-    <wiek>: liczba lat, lub przelicz rok urodzenia.
+    <wiek>: liczba lat, lub przelicz rok urodzenia od aktualnej daty, pamiętaj, że mamy 2025 rok
     <5 km Tempo>: w minutach/km, np. 6:20 lub 6.20, jeśli ktoś poda czas biegu na 5km to przelicz
     Zwróć wynik jako poprawny JSON:
     {"Płeć": "...", "Wiek": ..., "5 km Tempo": ...}
